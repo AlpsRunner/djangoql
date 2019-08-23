@@ -38,6 +38,8 @@
     var textarea;
     var input = document.querySelector('input[name=q]');
     var djangoQL;
+    var QLSend = document.querySelector('input[type="submit"]');
+    var changelistForm = document.querySelector('#changelist-form');
 
     if (!input) {
       return;
@@ -99,5 +101,18 @@
       selector: 'textarea[name=q]',
       autoResize: true
     });
+
+    QLSend.onclick = function (event) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', window.location.pathname + '?q=' + textarea.value);
+      xhr.onload = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+              changelistForm.innerHTML = JSON.parse(xhr.responseText).changelist_form;
+          }
+      };
+      xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      xhr.send(null);
+      event.preventDefault();
+    }
   });
 }(window.DjangoQL));

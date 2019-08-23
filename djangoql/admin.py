@@ -2,6 +2,7 @@ import json
 
 from django.conf.urls import url
 from django.contrib import messages
+from django.contrib.admin.options import csrf_protect_m
 from django.contrib.admin.views.main import ChangeList
 from django.core.exceptions import FieldError, ValidationError
 from django.forms import Media
@@ -39,6 +40,7 @@ class DjangoQLSearchMixin(object):
     djangoql_completion = True
     djangoql_schema = DjangoQLSchema
     djangoql_syntax_help_template = 'djangoql/syntax_help.html'
+    djangoql_result_limit = 2  # just for qs limit when async request
 
     def search_mode_toggle_enabled(self):
         # If search fields were defined on a child ModelAdmin instance,
@@ -66,8 +68,14 @@ class DjangoQLSearchMixin(object):
         if not search_term:
             return queryset, use_distinct
         try:
+            apply_search_tmp = apply_search(queryset, search_term, self.djangoql_schema)
+            if request.is_ajax():
+                # If request is async we suppose that the developer wants additional actions
+                # like limiting, fuzzy search or typos correction
+                if self.djangoql_result_limit:
+                    apply_search_tmp = apply_search_tmp[:self.djangoql_result_limit]
             return (
-                apply_search(queryset, search_term, self.djangoql_schema),
+                apply_search_tmp,
                 use_distinct,
             )
         except (DjangoQLError, ValueError, FieldError, ValidationError) as e:
@@ -130,5 +138,20 @@ class DjangoQLSearchMixin(object):
         response = self.djangoql_schema(self.model).as_dict()
         return HttpResponse(
             content=json.dumps(response, indent=2),
+            content_type='application/json; charset=utf-8',
+        )
+
+    @csrf_protect_m
+    def changelist_view(self, request, extra_context=None):
+        response = super(DjangoQLSearchMixin, self).changelist_view(request, extra_context)
+        if not request.is_ajax():
+            return response
+
+        content = render_to_string('djangoql/changelist_form.html',
+                                   context=response.context_data,
+                                   request=request)
+        response = {'changelist_form': content}
+        return HttpResponse(
+            content=json.dumps(response),
             content_type='application/json; charset=utf-8',
         )
