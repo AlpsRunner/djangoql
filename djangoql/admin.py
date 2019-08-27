@@ -39,6 +39,7 @@ class DjangoQLSearchMixin(object):
     djangoql_completion = True
     djangoql_schema = DjangoQLSchema
     djangoql_syntax_help_template = 'djangoql/syntax_help.html'
+    djangoql_completion_limit = 10  # just for djangoql_completion when async request
 
     def search_mode_toggle_enabled(self):
         # If search fields were defined on a child ModelAdmin instance,
@@ -123,6 +124,14 @@ class DjangoQLSearchMixin(object):
                     )),
                     name='djangoql_syntax_help',
                 ),
+                url(
+                    r'^field-options/(?P<model>[a-zA-Z.]+)/(?P<field>[a-zA-Z.]+)/(?P<prefix>.*)/$',
+                    self.field_options,
+                    name='%s_%s_djangoql_field_options' % (
+                        self.model._meta.app_label,
+                        self.model._meta.model_name,
+                    ),
+                ),
             ]
         return custom_urls + super(DjangoQLSearchMixin, self).get_urls()
 
@@ -130,5 +139,21 @@ class DjangoQLSearchMixin(object):
         response = self.djangoql_schema(self.model).as_dict()
         return HttpResponse(
             content=json.dumps(response, indent=2),
+            content_type='application/json; charset=utf-8',
+        )
+
+    def field_options(self, request, model, field, prefix=''):
+        field_options = self.djangoql_schema(self.model).models[model][field].get_options()
+        if prefix and prefix != '=':
+            # here can be any filters for suggestions
+            field_options = filter(lambda x: x.lower().count(prefix.lower()), field_options)
+
+        # here can be any sorting for suggestions
+        field_options = sorted(field_options)
+        if self.djangoql_completion_limit:
+            field_options = field_options[:self.djangoql_completion_limit]
+
+        return HttpResponse(
+            content=json.dumps({'field_options': field_options}),
             content_type='application/json; charset=utf-8',
         )

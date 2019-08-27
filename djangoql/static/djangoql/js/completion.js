@@ -807,9 +807,28 @@
               }.bind(this);
             }
             this.highlightCaseSensitive = this.valuesCaseSensitive;
-            this.suggestions = field.options.map(function (f) {
-              return suggestion(f, snippetBefore, snippetAfter);
-            });
+            // catch suggestion flag
+            if (field.options) {
+              var fieldOptionsRequest = new XMLHttpRequest();
+              var requestURL = window.location.pathname + 'field-options/' + context.model + '/' +
+                  context.field + '/' + this.prefix + '/';
+              // it's very important use false for sync request
+              // better way is usage of promises in future
+              fieldOptionsRequest.open('GET', requestURL, false);
+              fieldOptionsRequest.onload = function () {
+                var data;
+                if (fieldOptionsRequest.status === 200) {
+                  data = JSON.parse(fieldOptionsRequest.responseText);
+                  field.options = Array.from(data.field_options);
+                  this.suggestions = field.options.map(function (f) {
+                    return suggestion(f, snippetBefore, snippetAfter);
+                  });
+                } else {
+                  onLoadError();
+                }
+              }.bind(this);
+              fieldOptionsRequest.send(null);
+            }
           } else if (field.type === 'bool') {
             this.suggestions = [
               suggestion('True', '', ' '),
